@@ -1,6 +1,12 @@
 import unittest
 
-from collatz import collatz_sequence, collatz_step, longest_chain, stopping_time
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+from collatz import collatz_sequence, collatz_step, longest_chain, plot_html, stopping_time
 
 
 class CollatzTest(unittest.TestCase):
@@ -26,6 +32,34 @@ class CollatzTest(unittest.TestCase):
             collatz_sequence(0)
         with self.assertRaises(ValueError):
             stopping_time(-5)
+        with self.assertRaises(ValueError):
+            plot_html(0)
+
+    def test_plot_html(self):
+        html = plot_html(13)
+        self.assertIn("<title>Collatz Sequence 13</title>", html)
+        self.assertIn(f"const seq = {json.dumps(collatz_sequence(13))};", html)
+        self.assertNotIn("__START__", html)
+        self.assertNotIn("__SEQ__", html)
+
+    def test_plot_cli(self):
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "collatz.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run([sys.executable, script, "13", "--plot"],
+                                    cwd=tmp, capture_output=True, text=True, check=True)
+            self.assertIn("collatz-13.html", result.stdout)
+            with open(os.path.join(tmp, "collatz-13.html"), encoding="utf-8") as f:
+                self.assertEqual(f.read(), plot_html(13))
+
+            custom = os.path.join(tmp, "graph.html")
+            subprocess.run([sys.executable, script, "13", "--plot", custom], check=True,
+                           capture_output=True)
+            self.assertTrue(os.path.exists(custom))
+
+            missing_n = subprocess.run([sys.executable, script, "--plot"],
+                                       capture_output=True, text=True)
+            self.assertNotEqual(missing_n.returncode, 0)
+            self.assertIn("--plot needs a starting value", missing_n.stderr)
 
 
 if __name__ == "__main__":
